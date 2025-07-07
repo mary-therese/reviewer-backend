@@ -1,5 +1,7 @@
 import path from 'path';
+import { postprocessMarkdown } from '../utils/postprocessMarkdown.js';
 import { spawn } from 'child_process';
+
 
 export const handlePdfUpload = async (req, res) => {
   const filePath = req.file.path;
@@ -18,12 +20,19 @@ export const handlePdfUpload = async (req, res) => {
   py.on('close', (code) => {
     try {
       const result = JSON.parse(data);
+
+    // edited part
       if (result.success) {
-        res.json({
-          filename: req.file.originalname,
-          markdown: result.markdown
-        });
-      } else {
+  const cleaned = postprocessMarkdown(result.markdown, 'pdf');
+
+  res.json({
+    filename: req.file.originalname,
+    markdown: cleaned
+  });
+}
+
+      // up to here
+      else {
         res.status(500).json({ error: result.error || 'Failed to extract PDF.' });
       }
     } catch (err) {
@@ -50,12 +59,19 @@ export const handlePptxUpload = async (req, res) => {
   py.on('close', (code) => {
     try {
       const result = JSON.parse(data);
+
+      //edited part
       if (result.success) {
-        res.json({
-          filename: req.file.originalname,
-          markdown: result.markdown
-        });
-      } else {
+  const cleaned = postprocessMarkdown(result.markdown, 'pptx');
+
+  res.json({
+    filename: req.file.originalname,
+    markdown: cleaned
+  });
+}
+
+      // up to here
+      else {
         res.status(500).json({ error: result.error || 'Failed to extract PPTX.' });
       }
     } catch (err) {
@@ -83,12 +99,18 @@ export const handleDocxUpload = async (req, res) => {
   });
 
   pandoc.on('close', (code) => {
+    //edited part
     if (code === 0) {
-      res.json({
-        filename: req.file.originalname,
-        markdown: markdown.trim()
-      });
-    } else {
+  const cleaned = postprocessMarkdown(markdown, 'docx');
+
+  res.json({
+    filename: req.file.originalname,
+    markdown: cleaned
+  });
+}
+
+    // up to this
+    else {
       res.status(500).json({
         error: error || 'Failed to convert DOCX to Markdown.'
       });

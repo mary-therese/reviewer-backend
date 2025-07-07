@@ -1,6 +1,16 @@
 import sys
 import pdfplumber
 import json
+import re
+
+def is_figure_caption(line):
+    figure_patterns = [
+        r'^Figure\s+\d+(\.\d+)?[:\-]',
+        r'^Image\s+\d+[:\-]?',
+        r'^Chart\s+\d+[:\-]?',
+        r'^Diagram\s+\d+[:\-]?',
+    ]
+    return any(re.match(pat, line.strip()) for pat in figure_patterns)
 
 def extract_text_from_pdf(file_path):
     try:
@@ -9,9 +19,17 @@ def extract_text_from_pdf(file_path):
             for page in pdf.pages:
                 text = page.extract_text()
                 if text:
-                    markdown += text + "\n\n"
+                    lines = text.split('\n')
+                    cleaned_lines = []
 
-        # Basic cleanup (you’ll improve this later)
+                    for line in lines:
+                        if is_figure_caption(line):
+                            continue  # Skip caption lines
+                        cleaned_lines.append(line)
+
+                    cleaned_page = '\n'.join(cleaned_lines)
+                    markdown += cleaned_page + "\n\n"
+
         markdown = markdown.strip()
 
         result = {

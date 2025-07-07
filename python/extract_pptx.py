@@ -1,6 +1,20 @@
 import sys
 import json
+import re
 from pptx import Presentation
+
+def is_caption_like(text):
+    if not text or len(text.strip()) > 100:
+        return False
+
+    caption_patterns = [
+        r'^Figure\s+\d+(\.\d+)?[:\-]?',
+        r'^Chart\s+\d+[:\-]?',
+        r'^Image\s+\d+[:\-]?',
+        r'^Diagram\s+\d+[:\-]?',
+        r'^\(?Figure\s+\d+.*\)?$',
+    ]
+    return any(re.match(pat, text.strip()) for pat in caption_patterns)
 
 def extract_text_from_pptx(file_path):
     try:
@@ -11,8 +25,13 @@ def extract_text_from_pptx(file_path):
             slide_text = []
 
             for shape in slide.shapes:
-                if hasattr(shape, "text") and shape.text.strip():
-                    slide_text.append(shape.text.strip())
+                if hasattr(shape, "text"):
+                    text = shape.text.strip()
+                    if not text:
+                        continue
+                    if is_caption_like(text):
+                        continue  # Skip caption shapes
+                    slide_text.append(text)
 
             if slide_text:
                 markdown += "\n\n" + "\n".join(slide_text)
