@@ -3,9 +3,8 @@ import { postprocessMarkdown } from '../utils/postprocessMarkdown.js';
 import { spawn } from 'child_process';
 
 
-export const handlePdfUpload = async (req, res) => {
+export const handlePdfUpload = async (req, res, next) => {
   const filePath = req.file.path;
-
   const py = spawn('python', ['python/extract_pdf.py', filePath]);
 
   let data = '';
@@ -17,22 +16,18 @@ export const handlePdfUpload = async (req, res) => {
     console.error('Python error:', err.toString());
   });
 
-  py.on('close', (code) => {
-    try {
-      const result = JSON.parse(data);
+ py.on('close', (code) => {
+  try {
+    const result = JSON.parse(data);
+    if (result.success) {
+      //This commented out is for debugging sa terminal, to show the raw text from file
+      //console.log('[PDF] Raw Markdown:', result.markdown); //  Add this
 
-    // edited part
-      if (result.success) {
-  const cleaned = postprocessMarkdown(result.markdown, 'pdf');
-
-  res.json({
-    filename: req.file.originalname,
-    markdown: cleaned
-  });
-}
-
-      // up to here
-      else {
+      const cleaned = postprocessMarkdown(result.markdown, 'pdf');
+      res._markdown = cleaned;
+      next();
+    }
+ else {
         res.status(500).json({ error: result.error || 'Failed to extract PDF.' });
       }
     } catch (err) {
@@ -42,9 +37,9 @@ export const handlePdfUpload = async (req, res) => {
   });
 };
 
-export const handlePptxUpload = async (req, res) => {
-  const filePath = req.file.path;
 
+export const handlePptxUpload = async (req, res, next) => {
+  const filePath = req.file.path;
   const py = spawn('python', ['python/extract_pptx.py', filePath]);
 
   let data = '';
@@ -56,22 +51,18 @@ export const handlePptxUpload = async (req, res) => {
     console.error('Python error:', err.toString());
   });
 
-  py.on('close', (code) => {
-    try {
-      const result = JSON.parse(data);
+py.on('close', (code) => {
+  try {
+    const result = JSON.parse(data);
+    if (result.success) {
+      //This commented out is for debugging sa terminal, to show the raw text from file
+      //console.log('[PPTX] Raw Markdown:', result.markdown); //  Add this
 
-      //edited part
-      if (result.success) {
-  const cleaned = postprocessMarkdown(result.markdown, 'pptx');
-
-  res.json({
-    filename: req.file.originalname,
-    markdown: cleaned
-  });
-}
-
-      // up to here
-      else {
+      const cleaned = postprocessMarkdown(result.markdown, 'pptx');
+      res._markdown = cleaned;
+      next();
+    }
+ else {
         res.status(500).json({ error: result.error || 'Failed to extract PPTX.' });
       }
     } catch (err) {
@@ -82,9 +73,9 @@ export const handlePptxUpload = async (req, res) => {
 };
 
 
-export const handleDocxUpload = async (req, res) => {
-  const filePath = req.file.path;
 
+export const handleDocxUpload = async (req, res, next) => {
+  const filePath = req.file.path;
   const pandoc = spawn('pandoc', ['-f', 'docx', '-t', 'markdown', filePath]);
 
   let markdown = '';
@@ -99,25 +90,21 @@ export const handleDocxUpload = async (req, res) => {
   });
 
   pandoc.on('close', (code) => {
-    //edited part
-    if (code === 0) {
-  const cleaned = postprocessMarkdown(markdown, 'docx');
+  if (code === 0) {
+    //This commented out is for debugging sa terminal, to show the raw text from file
+    //console.log('[DOCX] Raw Markdown:', markdown); //  Add this
 
-  res.json({
-    filename: req.file.originalname,
-    markdown: cleaned
-  });
-}
-
-    // up to this
-    else {
+    const cleaned = postprocessMarkdown(markdown, 'docx');
+    res._markdown = cleaned;
+    next();
+// pass control to feature controller
+    } else {
       res.status(500).json({
         error: error || 'Failed to convert DOCX to Markdown.'
       });
     }
   });
 };
-
 
 
 

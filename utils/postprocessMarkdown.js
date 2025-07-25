@@ -1,5 +1,5 @@
 /**
- * Normalize and clean extracted Markdown text into GPT-friendly structure.
+ * Normalize and clean extracted Markdown text before feeding to GPT.
  * 
  * @param {string} markdown - Raw markdown or extracted text
  * @param {'pdf' | 'pptx' | 'docx'} sourceType - Type of source file
@@ -22,25 +22,36 @@ function isCaptionLine(line) {
   return patterns.some((pat) => pat.test(line.trim()));
 }
 
+
 export function postprocessMarkdown(markdown, sourceType) {
+  //For Debugging in terminal, to show the processed text. It is limited to 500. Can be changed. For preview purposes.
+  console.log(`[postprocessMarkdown] Received (${sourceType}):`, markdown.slice(0, 2000)); // remove .slice(0, 2000)) if you don't want it but it could freeze you terminal if the text is huge.
+
+
   let text = markdown;
 
-  // Step 1: Normalize line endings
+  // S1: Normalize line endings
   text = text.replace(/\r\n/g, '\n');
 
-    // Step 1.5: Remove figure/image/chart lines (for .docx only)
-  if (sourceType === 'docx') {
-    text = text
-      .split('\n')
-      .filter((line) => !isCaptionLine(line))
-      .join('\n');
-  }
+  // S1.5: Remove figure/image/chart lines/captions (for .docx only)
+if (sourceType === 'docx') {
+  text = text
+    .split('\n')
+    .map((line) => {
+      if (isCaptionLine(line)) {
+        return `[Caption] ${line.trim()}`;
+      }
+      return line;
+    })
+    .join('\n');
+}
 
 
-    // Step 2: Normalize bullet symbols to Markdown dash
+
+  // S2: Normalize bullet symbols to Markdown dash
   text = text.replace(/^[\s•‣–-]{1,3}(?=\S)/gm, '- ');
 
-    // Step 3: Normalize numbered and lettered list items (1), 1., a), i. → 1.)
+  // S3: Normalize numbered and lettered list items (1), 1., a), i. → 1.)
   text = text.replace(/^(\s*)(\(?[0-9a-zA-Z]{1,3}[\).\]])(\s+)/gm, (match, indent, marker, space) => {
     // Always convert to "1. " style for Markdown
     let normalized = marker
@@ -52,12 +63,11 @@ export function postprocessMarkdown(markdown, sourceType) {
       normalized = normalized.toLowerCase();
     }
 
-    
     return `${indent}${normalized}. `;
   });
 
 
-      // Step 4: Merge broken lines into full paragraphs
+  // S4: Merge broken lines into full paragraphs
   text = text.replace(/([^\n])\n(?=[^\n])/g, (match, prevChar) => {
     // If the line doesn't end in punctuation, merge it with a space
     if (!/[.?!:;"”)]$/.test(prevChar)) {
@@ -66,13 +76,14 @@ export function postprocessMarkdown(markdown, sourceType) {
     return match;
   });
 
-    // Step 5: Ensure proper space after heading markers (e.g., ##Heading → ## Heading)
+  // S5: Ensure proper space after heading markers (e.g., ##Heading → ## Heading)
   text = text.replace(/^(#{1,6})([^\s#])/gm, '$1 $2');
 
-  // Step 6: Remove extra blank lines (max 2 newlines in a row)
+  // S6: Remove extra blank lines (max 2 newlines in a row)
   text = text.replace(/\n{3,}/g, '\n\n');
 
-
+  //For Debugging in terminal, to show the processed text. It is limited to 500. Can be changed. For preview purposes.
+  console.log(`[postprocessMarkdown] Final Output (${sourceType}):`, text.slice(0, 2000)); // remove .slice(0, 2000)) if you don't want it but it could freeze you terminal if the text is huge.
 
   return text.trim();
 }

@@ -13,6 +13,7 @@ def is_caption_like(text):
         r'^Image\s+\d+[:\-]?',
         r'^Diagram\s+\d+[:\-]?',
         r'^\(?Figure\s+\d+.*\)?$',
+        r'^Fig\.?\s+\d+.*',
     ]
     return any(re.match(pat, text.strip()) for pat in caption_patterns)
 
@@ -24,14 +25,16 @@ def extract_text_from_pptx(file_path):
         for slide in prs.slides:
             slide_text = []
 
+            #note: add this prompt for revieweing captions before ignoring --> "Ignore lines starting with [Caption] unless they include relevant definitions or explanations."
             for shape in slide.shapes:
                 if hasattr(shape, "text"):
                     text = shape.text.strip()
                     if not text:
                         continue
                     if is_caption_like(text):
-                        continue  # Skip caption shapes
-                    slide_text.append(text)
+                        slide_text.append(f"[Caption] {text}")
+                    else:
+                        slide_text.append(text)
 
             if slide_text:
                 markdown += "\n\n" + "\n".join(slide_text)

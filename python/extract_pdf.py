@@ -5,10 +5,11 @@ import re
 
 def is_figure_caption(line):
     figure_patterns = [
-        r'^Figure\s+\d+(\.\d+)?[:\-]',
+        r'^Figure\s+\d+(\.\d+)?[:\-]?',
         r'^Image\s+\d+[:\-]?',
         r'^Chart\s+\d+[:\-]?',
         r'^Diagram\s+\d+[:\-]?',
+        r'^Fig\.?\s+\d+.*',
     ]
     return any(re.match(pat, line.strip()) for pat in figure_patterns)
 
@@ -22,10 +23,13 @@ def extract_text_from_pdf(file_path):
                     lines = text.split('\n')
                     cleaned_lines = []
 
+                    #note: add this prompt for revieweing captions before ignoring --> "Ignore lines starting with [Caption] unless they include relevant definitions or explanations."
                     for line in lines:
+                        line = line.strip()
                         if is_figure_caption(line):
-                            continue  # Skip caption lines
-                        cleaned_lines.append(line)
+                            cleaned_lines.append(f"[Caption] {line}")
+                        else:
+                            cleaned_lines.append(line)
 
                     cleaned_page = '\n'.join(cleaned_lines)
                     markdown += cleaned_page + "\n\n"

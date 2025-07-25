@@ -1,251 +1,335 @@
-import path from 'path';
-import fs from 'fs';
-import { handlePdfUpload, handlePptxUpload, handleDocxUpload } from './uploadController.js';
+import { db } from '../utils/firebaseAdmin.js';
+import { simulateRes } from '../utils/simulateRes.js';
+import { postprocessMarkdown } from '../utils/postprocessMarkdown.js';
 
-export const summarizeFeature = async (req, res) => {
-  try {
-    let markdown = '';
-    let filename = '';
-    
-    // CASE 1: File upload
-    if (req.file) {
-      filename = req.file.originalname;
-      const ext = path.extname(filename).toLowerCase();
 
-      // Process file type
-      if (ext === '.pdf') {
-        const fakeRes = await simulateRes();
-        await handlePdfUpload(req, fakeRes);
-        markdown = fakeRes._markdown;
-      } else if (ext === '.pptx') {
-        const fakeRes = await simulateRes();
-        await handlePptxUpload(req, fakeRes);
-        markdown = fakeRes._markdown;
-      } else if (ext === '.docx') {
-        const fakeRes = await simulateRes();
-        await handleDocxUpload(req, fakeRes);
-        markdown = fakeRes._markdown;
-      } else {
-        return res.status(400).json({ error: 'Unsupported file type' });
-      }
+// Function to update counter and return the next reviewerId (ex. ac1, td1, etc.)
+const updateCounterAndGetId = async (uid, folderId, prefix) => {
+  const metaRef = db.collection('users').doc(uid).collection('meta').doc('counters');
 
-    // CASE 2: Markdown string directly
-    } else if (req.body.markdown) {
-      markdown = req.body.markdown;
-      filename = 'Text Input';
-    } else {
-      return res.status(400).json({ error: 'No file or markdown provided' });
+  await db.runTransaction(async (transaction) => {
+    const metaDoc = await transaction.get(metaRef);
+    if (!metaDoc.exists) {
+      transaction.set(metaRef, {
+        acronymCounter: 0,
+        termCounter: 0,
+        summarizationCounter: 0,
+        aiCounter: 0
+      });
     }
+  });
 
-    // 🔧 MOCK GPT OUTPUT
-    const dummySummary = {
-      id: 'std1',
-      title: filename,
-      sections: [
-        {
-          title: 'Introduction',
-          bullets: [
-            'This is a mock summary point.',
-            'It will later come from GPT.'
-          ]
-        },
-        {
-          title: 'Conclusion',
-          bullets: [
-            'Another key point.',
-            'Summarization done.'
-          ]
-        }
-      ]
-    };
+  const counterField = {
+    AcronymMnemonics: 'acronymCounter',
+    TermsAndCondition: 'termCounter',
+    SummarizedReviewers: 'summarizationCounter',
+    SummarizedAIReviewers: 'aiCounter'
+  }[folderId];
 
-    res.json(dummySummary);
+  const counterRef = db.collection('users').doc(uid).collection('meta').doc('counters');
+  const counterSnapshot = await counterRef.get();
+  const current = counterSnapshot.data()?.[counterField] || 0;
+  const next = current + 1;
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Summarization failed.' });
-  }
-};
+  await counterRef.update({ [counterField]: next });
 
-// Simulate a dummy response wrapper so you can reuse upload logic
-function simulateRes() {
-  const res = {};
-  res.json = (data) => { res._markdown = data.markdown; };
-  return res;
-}
-
-
-
-
-export const explainFeature = async (req, res) => {
-  try {
-    let markdown = '';
-    let filename = '';
-
-    if (req.file) {
-      filename = req.file.originalname;
-      const ext = path.extname(filename).toLowerCase();
-
-      const fakeRes = simulateRes();
-      if (ext === '.pdf') {
-        await handlePdfUpload(req, fakeRes);
-      } else if (ext === '.pptx') {
-        await handlePptxUpload(req, fakeRes);
-      } else if (ext === '.docx') {
-        await handleDocxUpload(req, fakeRes);
-      } else {
-        return res.status(400).json({ error: 'Unsupported file type' });
-      }
-
-      markdown = fakeRes._markdown;
-
-    } else if (req.body.markdown) {
-      markdown = req.body.markdown;
-      filename = 'Text Input';
-    } else {
-      return res.status(400).json({ error: 'No file or markdown provided' });
-    }
-
-    //  Mock GPT output (AI-style explanations)
-    const dummyExplained = {
-      id: 'std3',
-      title: filename,
-      sections: [
-        {
-          title: 'Memory Management',
-          bullets: [
-            'AI: Memory management ensures processes don’t overwrite each other.',
-            'AI: Paging helps organize memory into small, manageable blocks.'
-          ]
-        },
-        {
-          title: 'Process Scheduling',
-          bullets: [
-            'AI: The OS decides which task runs next — like a queue!',
-            'AI: Priorities help ensure urgent tasks run sooner.'
-          ]
-        }
-      ]
-    };
-
-    res.json(dummyExplained);
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Explanation feature failed.' });
-  }
+  return `${prefix}${next}`;
 };
 
 
 
-export const termsFeature = async (req, res) => {
-  try {
-    let markdown = '';
-    let filename = '';
-
-    if (req.file) {
-      filename = req.file.originalname;
-      const ext = path.extname(filename).toLowerCase();
-
-      const fakeRes = simulateRes();
-      if (ext === '.pdf') {
-        await handlePdfUpload(req, fakeRes);
-      } else if (ext === '.pptx') {
-        await handlePptxUpload(req, fakeRes);
-      } else if (ext === '.docx') {
-        await handleDocxUpload(req, fakeRes);
-      } else {
-        return res.status(400).json({ error: 'Unsupported file type' });
-      }
-
-      markdown = fakeRes._markdown;
-    } else if (req.body.markdown) {
-      markdown = req.body.markdown;
-      filename = 'Text Input';
-    } else {
-      return res.status(400).json({ error: 'No file or markdown provided' });
-    }
-
-    //  Dummy GPT-style Flashcards (terms + definitions)
-    const dummyTerms = {
-      id: 'td1',
-      title: filename,
-      questions: [
-        {
-          id: 'q1',
-          question: 'What is a function in JavaScript?',
-          answer: 'A reusable block of code designed to perform a task.'
-        },
-        {
-          id: 'q2',
-          question: 'Define variable.',
-          answer: 'A container for storing data values.'
-        }
-      ]
-    };
-
-    res.json(dummyTerms);
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Term extraction failed.' });
-  }
-};
-
-
-
+//Acronym Feature
 export const acronymFeature = async (req, res) => {
   try {
-    let markdown = '';
-    let filename = '';
+    const uid = req.user.uid;
+    const folderId = 'AcronymMnemonics';
+    const prefix = 'ac';
 
-    if (req.file) {
-      filename = req.file.originalname;
-      const ext = path.extname(filename).toLowerCase();
+    let markdown = req.body.markdown || '';
 
-      const fakeRes = simulateRes();
-      if (ext === '.pdf') {
-        await handlePdfUpload(req, fakeRes);
-      } else if (ext === '.pptx') {
-        await handlePptxUpload(req, fakeRes);
-      } else if (ext === '.docx') {
-        await handleDocxUpload(req, fakeRes);
-      } else {
-        return res.status(400).json({ error: 'Unsupported file type' });
-      }
-
-      markdown = fakeRes._markdown;
-    } else if (req.body.markdown) {
-      markdown = req.body.markdown;
-      filename = 'Text Input';
-    } else {
-      return res.status(400).json({ error: 'No file or markdown provided' });
+    //FOr debugging purposes if it's working correctly at the backend
+    if (!markdown && req.file) {
+      markdown = await simulateRes(req.file.path, req.file.mimetype);
     }
 
-    // Dummy GPT-style Acronym Flashcard
-    const dummyAcronym = {
-      id: 'ac1',
-      title: filename,
-      Desc: 'AcronymFlashcards',
-      content: [
-        {
-          id: 'q1',
-          title: 'Phases of UP',
-          contents: [
-            { letter: 'I', word: 'Inception' },
-            { letter: 'E', word: 'Elaboration' },
-            { letter: 'C', word: 'Construction' },
-            { letter: 'T', word: 'Transition' }
-          ],
-          keyPhrase: 'Imagine Every Challenge Triumphs'
-        }
-      ]
+    console.log('[Acronym] UID:', uid);
+    console.log('[Acronym] Folder ID:', folderId);
+    console.log('[Acronym] Markdown Length:', markdown.length);
+
+    // Dummy acronym flashcard sets
+    const acronymSets = [
+      {
+        title: "Phases of UP",
+        contents: [
+          { letter: "I", word: "Inception" },
+          { letter: "E", word: "Elaboration" },
+          { letter: "C", word: "Construction" },
+          { letter: "T", word: "Transition" },
+          { letter: "P", word: "Production" }
+        ],
+        keyPhrase: "Imagine Every Challenge Turns Possible"
+      },
+      {
+        title: "Functions of Management",
+        contents: [
+          { letter: "P", word: "Planning" },
+          { letter: "O", word: "Organizing" },
+          { letter: "L", word: "Leading" },
+          { letter: "C", word: "Controlling" }
+        ],
+        keyPhrase: "Please Observe Leaders Closely"
+      },
+      {
+        title: "SMART Goals",
+        contents: [
+          { letter: "S", word: "Specific" },
+          { letter: "M", word: "Measurable" },
+          { letter: "A", word: "Achievable" },
+          { letter: "R", word: "Relevant" },
+          { letter: "T", word: "Time-bound" }
+        ],
+        keyPhrase: "Set Meaningful Aims Reaching Timelines"
+      },
+      {
+        title: "DMAIC Methodology",
+        contents: [
+          { letter: "D", word: "Define" },
+          { letter: "M", word: "Measure" },
+          { letter: "A", word: "Analyze" },
+          { letter: "I", word: "Improve" },
+          { letter: "C", word: "Control" }
+        ],
+        keyPhrase: "Don't Miss Analyzing Improvements Clearly"
+      },
+      {
+        title: "SDLC Phases",
+        contents: [
+          { letter: "F", word: "Feasibility Study" },
+          { letter: "R", word: "Requirements Analysis" },
+          { letter: "D", word: "Design" },
+          { letter: "I", word: "Implementation" },
+          { letter: "T", word: "Testing" },
+          { letter: "M", word: "Maintenance" }
+        ],
+        keyPhrase: "FRaDIsTic Maintenance Plan"
+      }
+    ];
+
+    const reviewerId = await updateCounterAndGetId(uid, folderId, prefix);
+
+    const reviewerData = {
+      id: reviewerId,
+      reviewers: acronymSets
     };
 
-    res.json(dummyAcronym);
+    await db
+      .collection('users')
+      .doc(uid)
+      .collection('folders')
+      .doc(folderId)
+      .collection('reviewers')
+      .doc(reviewerId)
+      .set(reviewerData);
+
+    res.json({ reviewers: [reviewerData] });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Acronym feature failed.' });
+    console.error('acronymFeature error:', err);
+    res.status(500).json({ error: 'Failed to process acronyms' });
   }
 };
+
+
+
+//  Terms Feature
+export const termsFeature = async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const folderId = 'TermsAndCondition';
+    const prefix = 'td';
+    const reviewerId = await updateCounterAndGetId(uid, folderId, prefix);
+
+    //FOr debugging purposes if it's working correctly at the backend
+    let markdown = req.body.markdown || '';
+    if (!markdown && req.file) {
+      markdown = await simulateRes(req.file.path, req.file.mimetype);
+    }
+
+    console.log('[Terms] UID:', uid);
+    console.log('[Terms] Folder ID:', folderId);
+    console.log('[Terms] Reviewer ID:', reviewerId);
+    console.log('[Terms] Markdown Length:', markdown.length);
+
+    const termsSets = [
+      {
+        title: "HTML Reviewer",
+        questions: [
+          { id: "q1", question: "What does HTML stand for?", answer: "HyperText Markup Language" },
+          { id: "q2", question: "Which HTML tag is used to create a hyperlink?", answer: "<a>" },
+          { id: "q3", question: "Which tag is used to insert an image in HTML?", answer: "<img>" },
+          { id: "q4", question: "What is the purpose of the <head> tag in HTML?", answer: "It contains metadata and links to scripts and stylesheets." },
+          { id: "q5", question: "What attribute is used to provide alternative text for an image?", answer: "alt" }
+        ]
+      }
+    ];
+
+    const reviewerData = {
+      id: reviewerId,
+      reviewers: termsSets
+    };
+
+    await db.collection('users')
+      .doc(uid)
+      .collection('folders')
+      .doc(folderId)
+      .collection('reviewers')
+      .doc(reviewerId)
+      .set(reviewerData);
+
+    res.json({ reviewers: [reviewerData] });
+  } catch (err) {
+    console.error('termsFeature error:', err);
+    res.status(500).json({ error: 'Failed to process terms' });
+  }
+};
+
+
+//  Summarization Feature
+export const summarizeFeature = async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const folderId = 'SummarizedReviewers';
+    const prefix = 'std';
+    const reviewerId = await updateCounterAndGetId(uid, folderId, prefix);
+
+    //FOr debugging purposes if it's working correctly at the backend
+    let markdown = req.body.markdown || '';
+    if (!markdown && req.file) {
+      markdown = await simulateRes(req.file.path, req.file.mimetype);
+    }
+
+    console.log('[Summarize] UID:', uid);
+    console.log('[Summarize] Folder ID:', folderId);
+    console.log('[Summarize] Reviewer ID:', reviewerId);
+    console.log('[Summarize] Markdown Length:', markdown.length);
+
+    const summarySets = [
+      {
+        title: "Web Development Reviewer",
+        sections: [
+          {
+            title: "JavaScript Overview",
+            bullets: [
+              "JavaScript is primarily used to add interactivity and dynamic behavior to websites.",
+              "Common keywords for declaring variables: let, const, or var.",
+              "Expression '2' + 2 results in '22' due to string concatenation.",
+              "Functions can be defined using: function myFunction() { }",
+              "The addEventListener method attaches an event handler to an element."
+            ]
+          },
+          {
+            title: "Web Accessibility Essentials",
+            bullets: [
+              "WCAG stands for Web Content Accessibility Guidelines.",
+              "Alt text describes images for screen readers and improves accessibility.",
+              "The aria-label attribute helps screen readers understand the purpose of a link.",
+              "Use heading tags (h1–h6) in order to provide a logical structure for screen readers.",
+              "Color contrast ensures readability for users with visual impairments."
+            ]
+          }
+        ]
+      }
+    ];
+
+    const reviewerData = {
+      id: reviewerId,
+      reviewers: summarySets
+    };
+
+    await db.collection('users')
+      .doc(uid)
+      .collection('folders')
+      .doc(folderId)
+      .collection('reviewers')
+      .doc(reviewerId)
+      .set(reviewerData);
+
+    res.json({ reviewers: [reviewerData] });
+  } catch (err) {
+    console.error('summarizeFeature error:', err);
+    res.status(500).json({ error: 'Failed to process summarization' });
+  }
+};
+
+
+//  Explanation Feature
+export const explainFeature = async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const folderId = 'SummarizedAIReviewers';
+    const prefix = 'ai';
+    const reviewerId = await updateCounterAndGetId(uid, folderId, prefix);
+
+    //FOr debugging purposes if it's working correctly at the backend
+    let markdown = req.body.markdown || '';
+    if (!markdown && req.file) {
+      markdown = await simulateRes(req.file.path, req.file.mimetype); 
+    }
+
+    console.log('[Explain] UID:', uid);
+    console.log('[Explain] Folder ID:', folderId);
+    console.log('[Explain] Reviewer ID:', reviewerId);
+    console.log('[Explain] Markdown Length:', markdown.length);
+
+    const explanationSets = [
+      {
+        title: "Operating System Concepts (AI Summary)",
+        sections: [
+          {
+            title: "Process Management",
+            bullets: [
+              "AI: A process is a program in execution, including program counter, registers, and variables.",
+              "The OS uses process scheduling to maximize CPU usage and reduce wait times.",
+              "Multitasking involves context switching between processes."
+            ]
+          },
+          {
+            title: "Memory Management",
+            bullets: [
+              "AI: Memory management ensures each process has enough memory and prevents overlap.",
+              "Paging and segmentation help divide memory into manageable sections.",
+              "Virtual memory allows larger programs by using disk space as RAM overflow."
+            ]
+          },
+          {
+            title: "File Systems",
+            bullets: [
+              "AI: File systems store and organize data on storage devices.",
+              "Common types include FAT, NTFS, ext4.",
+              "Each file has attributes like name, type, and access permissions."
+            ]
+          }
+        ]
+      }
+    ];
+
+    const reviewerData = {
+      id: reviewerId,
+      reviewers: explanationSets
+    };
+
+    await db.collection('users')
+      .doc(uid)
+      .collection('folders')
+      .doc(folderId)
+      .collection('reviewers')
+      .doc(reviewerId)
+      .set(reviewerData);
+
+    res.json({ reviewers: [reviewerData] });
+  } catch (err) {
+    console.error('explainFeature error:', err);
+    res.status(500).json({ error: 'Failed to process explanation' });
+  }
+};
+

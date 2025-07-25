@@ -1,7 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-
-// All imports must go first
+import verifyFirebaseToken from '../middleware/verifyFirebaseToken.js';
 import {
   summarizeFeature,
   explainFeature,
@@ -10,17 +9,11 @@ import {
 } from '../controllers/featureController.js';
 
 const router = express.Router();
+const upload = multer({ dest: 'tmp/' });
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, './tmp'),
-  filename: (req, file, cb) => cb(null, file.originalname)
-});
-const upload = multer({ storage });
-
-// Routes
-router.post('/summarize', upload.single('file'), summarizeFeature);
-router.post('/explain', upload.single('file'), explainFeature);
-router.post('/terms', upload.single('file'), termsFeature);
-router.post('/acronyms', upload.single('file'), acronymFeature);
+router.post('/summarize', verifyFirebaseToken, upload.single('file'), summarizeFeature);
+router.post('/explain', verifyFirebaseToken, upload.single('file'), explainFeature);
+router.post('/terms', verifyFirebaseToken, upload.single('file'), termsFeature);
+router.post('/acronyms', verifyFirebaseToken, upload.single('file'), acronymFeature);
 
 export default router;
